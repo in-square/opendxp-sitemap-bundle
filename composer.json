@@ -14,7 +14,7 @@
   ],
   "require": {
     "php": "^8.3",
-    "insquare/opendxp-process-manager-bundle": "^1.0",
+    "in-square/opendxp-process-manager-bundle": "^1.0",
     "symfony/framework-bundle": "^7.4",
     "symfony/messenger": "^7.4",
     "symfony/console": "^7.4",
