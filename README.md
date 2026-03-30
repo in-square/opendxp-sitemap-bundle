@@ -4,8 +4,8 @@ Static XML sitemap generator for OpenDXP (Documents + DataObjects) with multi-si
 
 ## Requirements
 
-- PHP 8.1+
-- OpenDXP 11 / Symfony 6.4
+- PHP 8.3+
+- OpenDXP 1.x / Symfony 7.4
 - Symfony Messenger (for queue processing)
 - Elements Process Manager (commands integrate with Process Manager)
 
