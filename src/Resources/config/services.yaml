@@ -1,0 +1,8 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+
+  InSquare\OpendxpSitemapBundle\:
+    resource: '../../'
+    exclude: '../../{DependencyInjection,Tests,InSquareOpendxpSitemapBundle.php}'

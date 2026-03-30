@@ -1,0 +1,3 @@
+in_square_opendxp_sitemap:
+  resource: '@InSquareOpendxpSitemapBundle/Controller/'
+  type: attribute

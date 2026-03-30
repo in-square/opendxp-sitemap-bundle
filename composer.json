@@ -1,0 +1,36 @@
+{
+  "name": "in-square/opendxp-sitemap-bundle",
+  "description": "Static XML sitemap generator for OpenDXP (Documents + DataObjects).",
+  "type": "opendxp-bundle",
+  "keywords": ["opendxp", "sitemap", "opendxp-bundle", "opendxp-plugin"],
+  "license": "GPL-3.0-or-later",
+  "homepage": "https://github.com/in-square/opendxp-sitemap-bundle",
+  "authors": [
+    {
+      "name": "Wladyslaw Dudko",
+      "email": "w.dudko@insquare.pl",
+      "homepage": "https://insquare.pl/"
+    }
+  ],
+  "require": {
+    "php": "^8.3",
+    "insquare/opendxp-process-manager-bundle": "@dev",
+    "symfony/framework-bundle": "^7.4",
+    "symfony/messenger": "^7.4",
+    "symfony/console": "^7.4",
+    "symfony/routing": "^7.4",
+    "open-dxp/opendxp": "^1.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "InSquare\\OpendxpSitemapBundle\\": "src/"
+    }
+  },
+  "extra": {
+    "opendxp": {
+      "bundles": [
+        "InSquare\\OpendxpSitemapBundle\\InSquareOpendxpSitemapBundle"
+      ]
+    }
+  }
+}
