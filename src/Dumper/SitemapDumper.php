@@ -57,8 +57,6 @@ final class SitemapDumper
             $siteIndexEntries = [];
 
             foreach ($languages as $language) {
-                $localeIndexEntries = [];
-
                 $documentsFilename = $this->buildDocumentsFileName($currentSiteId, $language);
                 $documentsPath = $this->outputDir . '/' . $documentsFilename;
 
@@ -71,7 +69,7 @@ final class SitemapDumper
                 );
 
                 if ($documentsLastmod instanceof \DateTimeInterface) {
-                    $localeIndexEntries[] = [
+                    $siteIndexEntries[] = [
                         'path' => $this->buildPublicPath($documentsFilename),
                         'lastmod' => $documentsLastmod,
                     ];
@@ -97,7 +95,7 @@ final class SitemapDumper
                     );
 
                     if ($objectLastmod instanceof \DateTimeInterface) {
-                        $localeIndexEntries[] = [
+                        $siteIndexEntries[] = [
                             'path' => $this->buildPublicPath($objectFilename),
                             'lastmod' => $objectLastmod,
                         ];
@@ -105,19 +103,6 @@ final class SitemapDumper
                     }
                 }
 
-                if ($localeIndexEntries === []) {
-                    continue;
-                }
-
-                $localeIndexFilename = $this->buildLocaleIndexFileName($currentSiteId, $language);
-                $localeIndexPath = $this->outputDir . '/' . $localeIndexFilename;
-                $this->writeSitemapIndex($localeIndexPath, $host, $localeIndexEntries);
-                $filesCreated++;
-
-                $siteIndexEntries[] = [
-                    'path' => $this->buildPublicPath($localeIndexFilename),
-                    'lastmod' => $this->maxLastmodFromEntries($localeIndexEntries),
-                ];
             }
 
             if ($siteIndexEntries === []) {
@@ -297,24 +282,6 @@ final class SitemapDumper
         $writer->endElement();
         $writer->endDocument();
         $writer->flush();
-    }
-
-    private function maxLastmodFromEntries(array $entries): ?\DateTimeInterface
-    {
-        $max = null;
-
-        foreach ($entries as $entry) {
-            $lastmod = $entry['lastmod'] ?? null;
-            if (!$lastmod instanceof \DateTimeInterface) {
-                continue;
-            }
-
-            if ($max === null || $lastmod->getTimestamp() > $max->getTimestamp()) {
-                $max = $lastmod;
-            }
-        }
-
-        return $max;
     }
 
     private function normalizeHost(string $host): string
