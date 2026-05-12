@@ -30,6 +30,10 @@ final class ObjectSitemapItemBuilder
         if ($siteId === null || $locale === null || $generatorId === null) {
             throw new \InvalidArgumentException('Object sitemap message requires siteId, locale, and generatorId.');
         }
+        $runToken = $message->getRunToken();
+        if (!is_string($runToken) || $runToken === '') {
+            return;
+        }
 
         $generator = $this->registry->getById($generatorId);
         if ($generator === null) {
@@ -51,7 +55,7 @@ final class ObjectSitemapItemBuilder
             return;
         }
 
-        $this->repository->insert([
+        $this->repository->upsert([
             'element_type' => SitemapItemCreateMessage::TYPE_OBJECT,
             'element_id' => $item->getElementId(),
             'element_class' => $item->getElementClass(),
@@ -61,6 +65,7 @@ final class ObjectSitemapItemBuilder
             'lastmod' => $item->getLastmod(),
             'priority' => $item->getPriority(),
             'changefreq' => $item->getChangefreq(),
+            'last_seen_run_token' => $runToken,
         ]);
     }
 }

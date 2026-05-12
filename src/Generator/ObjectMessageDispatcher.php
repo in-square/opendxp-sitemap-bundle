@@ -29,7 +29,7 @@ final class ObjectMessageDispatcher
         $this->allowedGeneratorIds = array_map('strval', array_keys($config['object_generators'] ?? []));
     }
 
-    public function generate(): int
+    public function generate(string $runToken): int
     {
         $dispatched = 0;
 
@@ -82,7 +82,8 @@ final class ObjectMessageDispatcher
                                 (int) $id,
                                 $siteId,
                                 $locale,
-                                $generatorId
+                                $generatorId,
+                                $runToken
                             ));
                             $dispatched++;
                         }

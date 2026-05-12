@@ -36,7 +36,7 @@ final class DocumentSitemapItemBuilder
         }
     }
 
-    public function buildFromDocumentId(int $documentId): void
+    public function buildFromDocumentId(int $documentId, string $runToken): void
     {
         $document = Document::getById($documentId);
         if (!$document instanceof Page) {
@@ -66,7 +66,7 @@ final class DocumentSitemapItemBuilder
         $url = $this->buildUrl($host, $path);
         $lastmod = $this->resolveLastmod($document);
 
-        $this->repository->insert([
+        $this->repository->upsert([
             'element_type' => SitemapItemCreateMessage::TYPE_DOCUMENT,
             'element_id' => $documentId,
             'element_class' => null,
@@ -76,6 +76,7 @@ final class DocumentSitemapItemBuilder
             'lastmod' => $lastmod,
             'priority' => null,
             'changefreq' => null,
+            'last_seen_run_token' => $runToken,
         ]);
     }
 

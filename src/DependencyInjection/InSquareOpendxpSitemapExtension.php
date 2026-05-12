@@ -6,9 +6,10 @@ use InSquare\OpendxpSitemapBundle\Generator\ObjectGeneratorInterface;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Extension\Extension;
+use Symfony\Component\DependencyInjection\Extension\PrependExtensionInterface;
 use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
 
-final class InSquareOpendxpSitemapExtension extends Extension
+final class InSquareOpendxpSitemapExtension extends Extension implements PrependExtensionInterface
 {
     public function getAlias(): string
     {
@@ -29,5 +30,18 @@ final class InSquareOpendxpSitemapExtension extends Extension
             new FileLocator(__DIR__ . '/../Resources/config')
         );
         $loader->load('services.yaml');
+    }
+
+    public function prepend(ContainerBuilder $container): void
+    {
+        if (!$container->hasExtension('doctrine_migrations')) {
+            return;
+        }
+
+        $loader = new YamlFileLoader(
+            $container,
+            new FileLocator(__DIR__ . '/../Resources/config')
+        );
+        $loader->load('doctrine_migrations.yml');
     }
 }

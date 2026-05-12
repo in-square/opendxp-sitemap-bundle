@@ -68,6 +68,20 @@ final class Configuration implements ConfigurationInterface
                         ->end()
                     ->end()
                 ->end()
+                ->arrayNode('hreflang')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->booleanNode('enabled')
+                            ->defaultTrue()
+                        ->end()
+                        ->scalarNode('x_default_language')
+                            ->defaultNull()
+                        ->end()
+                        ->scalarNode('x_default_fallback_language')
+                            ->defaultNull()
+                        ->end()
+                    ->end()
+                ->end()
             ->end();
 
         return $treeBuilder;

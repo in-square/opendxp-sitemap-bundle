@@ -17,7 +17,7 @@ final class DocumentGenerator
         $this->messageBus = $messageBus;
     }
 
-    public function generate(): int
+    public function generate(string $runToken): int
     {
         $listing = new Listing();
         $listing->setCondition('type = ?', ['page']);
@@ -37,7 +37,11 @@ final class DocumentGenerator
             foreach ($ids as $id) {
                 $this->messageBus->dispatch(new SitemapItemCreateMessage(
                     SitemapItemCreateMessage::TYPE_DOCUMENT,
-                    (int) $id
+                    (int) $id,
+                    null,
+                    null,
+                    null,
+                    $runToken
                 ));
                 $dispatched++;
             }

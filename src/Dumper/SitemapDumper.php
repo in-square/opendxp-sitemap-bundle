@@ -15,6 +15,9 @@ final class SitemapDumper
     private int $maxUrlsPerFile;
     private array $objectGenerators;
     private ObjectGeneratorRegistry $objectGeneratorRegistry;
+    private bool $hreflangEnabled;
+    private ?string $xDefaultLanguage;
+    private ?string $xDefaultFallbackLanguage;
 
     public function __construct(
         SitemapItemRepository $repository,
@@ -29,6 +32,13 @@ final class SitemapDumper
         $output = $config['output'] ?? [];
         $this->outputDir = rtrim((string) ($output['dir'] ?? ''), '/');
         $this->maxUrlsPerFile = (int) ($output['max_urls_per_file'] ?? 50000);
+
+        $hreflang = $config['hreflang'] ?? [];
+        $this->hreflangEnabled = (bool) ($hreflang['enabled'] ?? true);
+        $configuredXDefault = isset($hreflang['x_default_language']) ? trim((string) $hreflang['x_default_language']) : '';
+        $this->xDefaultLanguage = $configuredXDefault !== '' ? $configuredXDefault : null;
+        $configuredFallback = isset($hreflang['x_default_fallback_language']) ? trim((string) $hreflang['x_default_fallback_language']) : '';
+        $this->xDefaultFallbackLanguage = $configuredFallback !== '' ? $configuredFallback : null;
     }
 
     public function dump(?int $siteId = null, ?string $locale = null): int
@@ -208,9 +218,20 @@ final class SitemapDumper
         $maxLastmod = null;
 
         while ($rows !== []) {
+            $alternatesByElementId = $this->buildAlternatesByElementId(
+                $siteId,
+                $elementType,
+                $elementClass,
+                $rows
+            );
+
             foreach ($rows as $row) {
                 $writer->startElement('url');
                 $writer->writeElement('loc', (string) $row['url']);
+
+                if ($this->hreflangEnabled) {
+                    $this->writeAlternateLinks($writer, $row, $alternatesByElementId);
+                }
 
                 $lastmod = $this->normalizeLastmod($row['lastmod'] ?? null);
                 if ($lastmod !== null) {
@@ -313,5 +334,159 @@ final class SitemapDumper
         }
 
         return null;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $rows
+     *
+     * @return array<int, array<string, string>>
+     */
+    private function buildAlternatesByElementId(
+        int $siteId,
+        string $elementType,
+        ?string $elementClass,
+        array $rows
+    ): array {
+        if (!$this->hreflangEnabled) {
+            return [];
+        }
+
+        $elementIds = [];
+        foreach ($rows as $row) {
+            $elementId = (int) ($row['element_id'] ?? 0);
+            if ($elementId > 0) {
+                $elementIds[] = $elementId;
+            }
+        }
+
+        $rawAlternates = $this->repository->fetchAlternatesBySiteTypeAndElementIds(
+            $siteId,
+            $elementType,
+            $elementClass,
+            $elementIds
+        );
+
+        $result = [];
+        foreach ($rawAlternates as $elementId => $alternates) {
+            $links = [];
+
+            foreach ($alternates as $alternate) {
+                $locale = $this->normalizeHreflang((string) ($alternate['locale'] ?? ''));
+                $url = (string) ($alternate['url'] ?? '');
+
+                if ($locale === '' || $url === '') {
+                    continue;
+                }
+
+                $links[$locale] = $url;
+            }
+
+            if ($links === []) {
+                continue;
+            }
+
+            ksort($links);
+                $links = $this->appendXDefault($links);
+                $result[(int) $elementId] = $links;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @param array<int, array<string, string>> $alternatesByElementId
+     */
+    private function writeAlternateLinks(\XMLWriter $writer, array $row, array $alternatesByElementId): void
+    {
+        $elementId = (int) ($row['element_id'] ?? 0);
+        if ($elementId <= 0) {
+            return;
+        }
+
+        $links = $alternatesByElementId[$elementId] ?? [];
+        $currentLocale = $this->normalizeHreflang((string) ($row['locale'] ?? ''));
+        $currentUrl = (string) ($row['url'] ?? '');
+
+        if ($currentLocale !== '' && $currentUrl !== '') {
+            $links[$currentLocale] = $currentUrl;
+        }
+
+        if ($links === []) {
+            return;
+        }
+
+        ksort($links);
+        $links = $this->appendXDefault($links);
+
+        foreach ($links as $hreflang => $href) {
+            $writer->startElement('xhtml:link');
+            $writer->writeAttribute('rel', 'alternate');
+            $writer->writeAttribute('hreflang', $hreflang);
+            $writer->writeAttribute('href', $href);
+            $writer->endElement();
+        }
+    }
+
+    /**
+     * @param array<string, string> $links
+     *
+     * @return array<string, string>
+     */
+    private function appendXDefault(array $links): array
+    {
+        if ($links === []) {
+            return $links;
+        }
+
+        if ($this->xDefaultLanguage !== null) {
+            $configured = $this->normalizeHreflang($this->xDefaultLanguage);
+            if (isset($links[$configured])) {
+                $links['x-default'] = $links[$configured];
+
+                return $links;
+            }
+        }
+
+        if ($this->xDefaultFallbackLanguage !== null) {
+            $fallback = $this->normalizeHreflang($this->xDefaultFallbackLanguage);
+            if ($fallback !== '' && isset($links[$fallback])) {
+                $links['x-default'] = $links[$fallback];
+            }
+        }
+
+        return $links;
+    }
+
+    private function normalizeHreflang(string $language): string
+    {
+        $language = trim($language);
+        if ($language === '') {
+            return '';
+        }
+
+        $parts = preg_split('/[-_]/', $language) ?: [];
+        if ($parts === []) {
+            return strtolower($language);
+        }
+
+        $primary = strtolower((string) array_shift($parts));
+        $normalized = [$primary];
+
+        foreach ($parts as $part) {
+            $part = trim((string) $part);
+            if ($part === '') {
+                continue;
+            }
+
+            if (strlen($part) === 4) {
+                $normalized[] = ucfirst(strtolower($part));
+                continue;
+            }
+
+            $normalized[] = strtoupper($part);
+        }
+
+        return implode('-', $normalized);
     }
 }

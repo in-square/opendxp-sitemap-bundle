@@ -24,8 +24,13 @@ final class SitemapItemCreateMessageHandler
 
     public function __invoke(SitemapItemCreateMessage $message): void
     {
+        $runToken = $message->getRunToken();
+        if (!is_string($runToken) || $runToken === '') {
+            return;
+        }
+
         if ($message->getElementType() === SitemapItemCreateMessage::TYPE_DOCUMENT) {
-            $this->documentBuilder->buildFromDocumentId($message->getElementId());
+            $this->documentBuilder->buildFromDocumentId($message->getElementId(), $runToken);
             return;
         }
 

@@ -12,13 +12,15 @@ final class SitemapItemCreateMessage
     private ?int $siteId;
     private ?string $locale;
     private ?string $generatorId;
+    private ?string $runToken;
 
     public function __construct(
         string $elementType,
         int $elementId,
         ?int $siteId = null,
         ?string $locale = null,
-        ?string $generatorId = null
+        ?string $generatorId = null,
+        ?string $runToken = null
     )
     {
         $this->elementType = $elementType;
@@ -26,6 +28,7 @@ final class SitemapItemCreateMessage
         $this->siteId = $siteId;
         $this->locale = $locale;
         $this->generatorId = $generatorId;
+        $this->runToken = $runToken;
     }
 
     public function getElementType(): string
@@ -51,5 +54,10 @@ final class SitemapItemCreateMessage
     public function getGeneratorId(): ?string
     {
         return $this->generatorId;
+    }
+
+    public function getRunToken(): ?string
+    {
+        return $this->runToken;
     }
 }

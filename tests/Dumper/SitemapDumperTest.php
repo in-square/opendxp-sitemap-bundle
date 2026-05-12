@@ -109,6 +109,212 @@ final class SitemapDumperTest extends TestCase
         self::assertStringContainsString('<urlset', (string) file_get_contents($this->outputDir . '/sitemap.0.en.documents.xml'));
     }
 
+    public function testDumpWritesHreflangAlternatesForSameDocumentElementAcrossLocales(): void
+    {
+        $repository = $this->createRepository();
+        $repository->insert([
+            'element_type' => SitemapItemCreateMessage::TYPE_DOCUMENT,
+            'element_id' => 10,
+            'element_class' => null,
+            'site_id' => 0,
+            'locale' => 'pl',
+            'url' => 'https://example.com/o-nas',
+            'lastmod' => new \DateTimeImmutable('2026-05-09 12:00:00'),
+        ]);
+        $repository->insert([
+            'element_type' => SitemapItemCreateMessage::TYPE_DOCUMENT,
+            'element_id' => 10,
+            'element_class' => null,
+            'site_id' => 0,
+            'locale' => 'en',
+            'url' => 'https://example.com/en/about',
+            'lastmod' => new \DateTimeImmutable('2026-05-09 12:00:01'),
+        ]);
+        $alternates = $repository->fetchAlternatesBySiteTypeAndElementIds(
+            0,
+            SitemapItemCreateMessage::TYPE_DOCUMENT,
+            null,
+            [10]
+        );
+        self::assertArrayHasKey(10, $alternates);
+        self::assertCount(2, $alternates[10]);
+
+        $dumper = new SitemapDumper(
+            $repository,
+            new ObjectGeneratorRegistry([]),
+            [
+                'sites' => [
+                    [
+                        'id' => 0,
+                        'host' => 'example.com',
+                        'languages' => ['pl', 'en'],
+                    ],
+                ],
+                'object_generators' => [],
+                'output' => [
+                    'dir' => $this->outputDir,
+                    'max_urls_per_file' => 50000,
+                ],
+                'hreflang' => [
+                    'enabled' => true,
+                    'x_default_language' => 'en',
+                ],
+            ]
+        );
+
+        self::assertSame(3, $dumper->dump());
+
+        $documentsPl = file_get_contents($this->outputDir . '/sitemap.0.pl.documents.xml');
+        self::assertIsString($documentsPl);
+        self::assertStringContainsString('hreflang="pl"', $documentsPl);
+        self::assertStringContainsString('href="https://example.com/o-nas"', $documentsPl);
+        self::assertStringContainsString('hreflang="en"', $documentsPl);
+        self::assertStringContainsString('href="https://example.com/en/about"', $documentsPl);
+        self::assertStringContainsString('hreflang="x-default"', $documentsPl);
+    }
+
+    public function testDumpDoesNotWriteHreflangLinksWhenDisabled(): void
+    {
+        $repository = $this->createRepository();
+        $repository->insert([
+            'element_type' => SitemapItemCreateMessage::TYPE_DOCUMENT,
+            'element_id' => 20,
+            'element_class' => null,
+            'site_id' => 0,
+            'locale' => 'pl',
+            'url' => 'https://example.com/oferta',
+            'lastmod' => new \DateTimeImmutable('2026-05-09 13:00:00'),
+        ]);
+        $repository->insert([
+            'element_type' => SitemapItemCreateMessage::TYPE_DOCUMENT,
+            'element_id' => 20,
+            'element_class' => null,
+            'site_id' => 0,
+            'locale' => 'en',
+            'url' => 'https://example.com/en/offer',
+            'lastmod' => new \DateTimeImmutable('2026-05-09 13:00:01'),
+        ]);
+
+        $dumper = new SitemapDumper(
+            $repository,
+            new ObjectGeneratorRegistry([]),
+            [
+                'sites' => [
+                    [
+                        'id' => 0,
+                        'host' => 'example.com',
+                        'languages' => ['pl', 'en'],
+                    ],
+                ],
+                'object_generators' => [],
+                'output' => [
+                    'dir' => $this->outputDir,
+                    'max_urls_per_file' => 50000,
+                ],
+                'hreflang' => [
+                    'enabled' => false,
+                    'x_default_language' => 'en',
+                ],
+            ]
+        );
+
+        self::assertSame(3, $dumper->dump());
+
+        $documentsPl = file_get_contents($this->outputDir . '/sitemap.0.pl.documents.xml');
+        self::assertIsString($documentsPl);
+        self::assertStringNotContainsString('<xhtml:link', $documentsPl);
+    }
+
+    public function testDumpUsesConfiguredFallbackLanguageForXDefaultWhenPreferredIsMissing(): void
+    {
+        $repository = $this->createRepository();
+        $repository->insert([
+            'element_type' => SitemapItemCreateMessage::TYPE_DOCUMENT,
+            'element_id' => 30,
+            'element_class' => null,
+            'site_id' => 0,
+            'locale' => 'pl',
+            'url' => 'https://example.com/kontakt',
+            'lastmod' => new \DateTimeImmutable('2026-05-09 14:00:00'),
+        ]);
+
+        $dumper = new SitemapDumper(
+            $repository,
+            new ObjectGeneratorRegistry([]),
+            [
+                'sites' => [
+                    [
+                        'id' => 0,
+                        'host' => 'example.com',
+                        'languages' => ['pl', 'en'],
+                    ],
+                ],
+                'object_generators' => [],
+                'output' => [
+                    'dir' => $this->outputDir,
+                    'max_urls_per_file' => 50000,
+                ],
+                'hreflang' => [
+                    'enabled' => true,
+                    'x_default_language' => 'en',
+                    'x_default_fallback_language' => 'pl',
+                ],
+            ]
+        );
+
+        self::assertSame(2, $dumper->dump());
+
+        $documentsPl = file_get_contents($this->outputDir . '/sitemap.0.pl.documents.xml');
+        self::assertIsString($documentsPl);
+        self::assertStringContainsString('hreflang="pl"', $documentsPl);
+        self::assertStringContainsString('hreflang="x-default"', $documentsPl);
+        self::assertStringContainsString('href="https://example.com/kontakt"', $documentsPl);
+    }
+
+    public function testDumpDoesNotAddXDefaultWhenPreferredIsMissingAndNoFallbackConfigured(): void
+    {
+        $repository = $this->createRepository();
+        $repository->insert([
+            'element_type' => SitemapItemCreateMessage::TYPE_DOCUMENT,
+            'element_id' => 40,
+            'element_class' => null,
+            'site_id' => 0,
+            'locale' => 'pl',
+            'url' => 'https://example.com/pomoc',
+            'lastmod' => new \DateTimeImmutable('2026-05-09 15:00:00'),
+        ]);
+
+        $dumper = new SitemapDumper(
+            $repository,
+            new ObjectGeneratorRegistry([]),
+            [
+                'sites' => [
+                    [
+                        'id' => 0,
+                        'host' => 'example.com',
+                        'languages' => ['pl', 'en'],
+                    ],
+                ],
+                'object_generators' => [],
+                'output' => [
+                    'dir' => $this->outputDir,
+                    'max_urls_per_file' => 50000,
+                ],
+                'hreflang' => [
+                    'enabled' => true,
+                    'x_default_language' => 'en',
+                ],
+            ]
+        );
+
+        self::assertSame(2, $dumper->dump());
+
+        $documentsPl = file_get_contents($this->outputDir . '/sitemap.0.pl.documents.xml');
+        self::assertIsString($documentsPl);
+        self::assertStringContainsString('hreflang="pl"', $documentsPl);
+        self::assertStringNotContainsString('hreflang="x-default"', $documentsPl);
+    }
+
     private function createRepository(): SitemapItemRepository
     {
         $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
@@ -123,7 +329,8 @@ final class SitemapDumperTest extends TestCase
                 url VARCHAR(2048) NOT NULL,
                 lastmod DATETIME NOT NULL,
                 priority DOUBLE PRECISION DEFAULT NULL,
-                changefreq VARCHAR(16) DEFAULT NULL
+                changefreq VARCHAR(16) DEFAULT NULL,
+                last_seen_run_token VARCHAR(32) DEFAULT NULL
             )'
         );
 

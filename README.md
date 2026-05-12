@@ -51,11 +51,19 @@ in_square_opendxp_sitemap:
   output:
     dir: '%kernel.project_dir%/public/sitemap'
     max_urls_per_file: 50000
+
+  hreflang:
+    enabled: true
+    x_default_language: 'en' # optional
+    x_default_fallback_language: 'pl' # optional fallback used only when x_default_language is missing
 ```
 
 Notes:
 - `sites[*].objects` defines DataObject classes to collect for each site.
 - `object_generators` keys must match `ObjectGeneratorInterface::getId()`; keys are used in sitemap filenames.
+- `hreflang.enabled` controls generation of `<xhtml:link rel="alternate" ... />` entries.
+- `hreflang.x_default_language` selects preferred locale for `x-default`.
+- `hreflang.x_default_fallback_language` is an explicit fallback locale if preferred one is missing; without it, `x-default` is omitted.
 
 ## Commands
 

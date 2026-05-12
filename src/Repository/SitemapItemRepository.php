@@ -17,6 +17,7 @@ final class SitemapItemRepository
         'lastmod',
         'priority',
         'changefreq',
+        'last_seen_run_token',
     ];
     private const FILTER_COLUMNS = [
         'id',
@@ -29,6 +30,21 @@ final class SitemapItemRepository
         'lastmod',
         'priority',
         'changefreq',
+        'last_seen_run_token',
+    ];
+    private const UPSERT_KEY_COLUMNS = [
+        'element_type',
+        'element_id',
+        'element_class',
+        'site_id',
+        'locale',
+    ];
+    private const UPSERT_UPDATE_COLUMNS = [
+        'url',
+        'lastmod',
+        'priority',
+        'changefreq',
+        'last_seen_run_token',
     ];
 
     private Connection $connection;
@@ -45,6 +61,26 @@ final class SitemapItemRepository
         $this->connection->insert(self::TABLE, $row);
 
         return (int) $this->connection->lastInsertId();
+    }
+
+    public function upsert(array $data): void
+    {
+        $row = $this->normalizeRowWithDefaults($data);
+        $platform = strtolower($this->connection->getDatabasePlatform()->getName());
+
+        if ($platform === 'mysql' || $platform === 'mariadb') {
+            $this->executeMySqlUpsert($row);
+
+            return;
+        }
+
+        if ($platform === 'sqlite' || $platform === 'postgresql' || $platform === 'postgres') {
+            $this->executeSqliteOrPostgresUpsert($row);
+
+            return;
+        }
+
+        throw new \RuntimeException(sprintf('Unsupported database platform for sitemap upsert: %s', $platform));
     }
 
     public function insertMany(array $rows): int
@@ -140,6 +176,28 @@ final class SitemapItemRepository
         $this->connection->executeStatement('TRUNCATE TABLE ' . self::TABLE);
     }
 
+    public function deleteRowsNotSeenInRunToken(string $runToken, ?int $siteId = null, ?string $locale = null): int
+    {
+        $queryBuilder = $this->connection->createQueryBuilder()
+            ->delete(self::TABLE)
+            ->where('last_seen_run_token IS NULL OR last_seen_run_token <> :runToken')
+            ->setParameter('runToken', $runToken);
+
+        if ($siteId !== null) {
+            $queryBuilder
+                ->andWhere('site_id = :siteId')
+                ->setParameter('siteId', $siteId);
+        }
+
+        if ($locale !== null && $locale !== '') {
+            $queryBuilder
+                ->andWhere('locale = :locale')
+                ->setParameter('locale', $locale);
+        }
+
+        return $queryBuilder->executeStatement();
+    }
+
     public function fetchBatchBySiteLocale(int $siteId, string $locale, int $limit, int $offset): array
     {
         $queryBuilder = $this->connection->createQueryBuilder()
@@ -205,6 +263,67 @@ final class SitemapItemRepository
         return $queryBuilder->executeQuery()->fetchAllAssociative();
     }
 
+    /**
+     * @return array<int, array<int, array{locale: string, url: string}>>
+     */
+    public function fetchAlternatesBySiteTypeAndElementIds(
+        int $siteId,
+        string $elementType,
+        ?string $elementClass,
+        array $elementIds
+    ): array {
+        $normalizedElementIds = array_values(array_unique(array_map('intval', $elementIds)));
+        if ($normalizedElementIds === []) {
+            return [];
+        }
+
+        $queryBuilder = $this->connection->createQueryBuilder()
+            ->select('element_id', 'locale', 'url')
+            ->from(self::TABLE)
+            ->where('site_id = :siteId')
+            ->andWhere('element_type = :elementType')
+            ->setParameter('siteId', $siteId)
+            ->setParameter('elementType', $elementType)
+            ->orderBy('element_id', 'ASC')
+            ->addOrderBy('locale', 'ASC');
+
+        $placeholders = [];
+        foreach ($normalizedElementIds as $index => $elementId) {
+            $parameterName = 'elementId' . $index;
+            $placeholders[] = ':' . $parameterName;
+            $queryBuilder->setParameter($parameterName, $elementId);
+        }
+        $queryBuilder->andWhere('element_id IN (' . implode(', ', $placeholders) . ')');
+
+        if ($elementClass === null) {
+            $queryBuilder->andWhere('(element_class IS NULL OR element_class = \'\')');
+        } else {
+            $queryBuilder
+                ->andWhere('element_class = :elementClass')
+                ->setParameter('elementClass', $elementClass);
+        }
+
+        $rows = $queryBuilder->executeQuery()->fetchAllAssociative();
+        $result = [];
+
+        foreach ($rows as $row) {
+            $id = (int) ($row['element_id'] ?? 0);
+            $locale = (string) ($row['locale'] ?? '');
+            $url = (string) ($row['url'] ?? '');
+
+            if ($id <= 0 || $locale === '' || $url === '') {
+                continue;
+            }
+
+            $result[$id][] = [
+                'locale' => $locale,
+                'url' => $url,
+            ];
+        }
+
+        return $result;
+    }
+
     private function normalizeRow(array $data): array
     {
         $row = [];
@@ -216,6 +335,9 @@ final class SitemapItemRepository
             $value = $data[$column];
             if ($column === 'lastmod' && $value instanceof \DateTimeInterface) {
                 $value = $value->format('Y-m-d H:i:s');
+            }
+            if ($column === 'element_class') {
+                $value = $this->normalizeElementClass($value);
             }
 
             $row[$column] = $value;
@@ -231,6 +353,9 @@ final class SitemapItemRepository
             $value = $data[$column] ?? null;
             if ($column === 'lastmod' && $value instanceof \DateTimeInterface) {
                 $value = $value->format('Y-m-d H:i:s');
+            }
+            if ($column === 'element_class') {
+                $value = $this->normalizeElementClass($value);
             }
 
             $row[$column] = $value;
@@ -251,5 +376,56 @@ final class SitemapItemRepository
         }
 
         return $filtered;
+    }
+
+    private function executeMySqlUpsert(array $row): void
+    {
+        $columns = self::COLUMNS;
+        $placeholders = implode(', ', array_fill(0, count($columns), '?'));
+        $updateSql = implode(', ', array_map(
+            static fn (string $column): string => sprintf('%1$s = VALUES(%1$s)', $column),
+            self::UPSERT_UPDATE_COLUMNS
+        ));
+
+        $sql = sprintf(
+            'INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s',
+            self::TABLE,
+            implode(', ', $columns),
+            $placeholders,
+            $updateSql
+        );
+
+        $this->connection->executeStatement($sql, array_values($row));
+    }
+
+    private function executeSqliteOrPostgresUpsert(array $row): void
+    {
+        $columns = self::COLUMNS;
+        $placeholders = implode(', ', array_fill(0, count($columns), '?'));
+        $conflictColumns = implode(', ', self::UPSERT_KEY_COLUMNS);
+        $updateSql = implode(', ', array_map(
+            static fn (string $column): string => sprintf('%1$s = excluded.%1$s', $column),
+            self::UPSERT_UPDATE_COLUMNS
+        ));
+
+        $sql = sprintf(
+            'INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (%s) DO UPDATE SET %s',
+            self::TABLE,
+            implode(', ', $columns),
+            $placeholders,
+            $conflictColumns,
+            $updateSql
+        );
+
+        $this->connection->executeStatement($sql, array_values($row));
+    }
+
+    private function normalizeElementClass(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        return (string) $value;
     }
 }
