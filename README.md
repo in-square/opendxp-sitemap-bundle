@@ -94,7 +94,8 @@ pre-generated file from `public/sitemap/sitemap.{siteId}.xml`.
 
 ## Object generators
 
-Implement `InSquare\OpendxpSitemapBundle\Generator\ObjectGeneratorInterface` in your app:
+Implement `InSquare\OpendxpSitemapBundle\Generator\ObjectGeneratorWithContextInterface` in your app
+to receive a normalized host from sitemap configuration:
 
 ```php
 <?php
@@ -103,12 +104,12 @@ declare(strict_types=1);
 
 namespace App\Sitemap;
 
-use InSquare\OpendxpSitemapBundle\Generator\ObjectGeneratorInterface;
+use InSquare\OpendxpSitemapBundle\Generator\ObjectGeneratorWithContextInterface;
 use InSquare\OpendxpSitemapBundle\Generator\SitemapItemData;
+use InSquare\OpendxpSitemapBundle\Generator\SitemapGeneratorContext;
 use OpenDXP\Model\DataObject\Post;
-use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
-final class PostGenerator implements ObjectGeneratorInterface
+final class PostGenerator implements ObjectGeneratorWithContextInterface
 {
     public function getId(): string
     {
@@ -120,7 +121,7 @@ final class PostGenerator implements ObjectGeneratorInterface
         return Post::class;
     }
 
-    public function buildItem(object $object, int $siteId, string $locale): ?SitemapItemData
+    public function buildItem(object $object, SitemapGeneratorContext $context): ?SitemapItemData
     {
         if (!$object instanceof Post) {
             return null;
@@ -135,11 +136,13 @@ final class PostGenerator implements ObjectGeneratorInterface
             return null;
         }
 
-        $url = $linkGenerator->generate($object, [
+        $locale = $context->getLocale();
+        $host = $context->getHost();
+        $path = $linkGenerator->generate($object, [
             'locale' => $locale,
-            'siteId' => $siteId,
-            'referenceType' => UrlGeneratorInterface::ABSOLUTE_URL,
+            'siteId' => $context->getSiteId(),
         ]);
+        $url = $host . '/' . ltrim((string) $path, '/');
 
         $lastmod = (new \DateTimeImmutable())->setTimestamp($object->getModificationDate());
 
@@ -154,3 +157,7 @@ final class PostGenerator implements ObjectGeneratorInterface
 ```
 
 The generator returns a `SitemapItemData` DTO used to persist rows in `sitemap_item`.
+
+Notes:
+- `SitemapGeneratorContext::getHost()` is normalized to an absolute host (for example `https://example.com`).
+- `ObjectGeneratorInterface` is deprecated and supported only for backward compatibility.

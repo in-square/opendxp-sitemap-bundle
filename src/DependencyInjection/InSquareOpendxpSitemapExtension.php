@@ -3,6 +3,7 @@
 namespace InSquare\OpendxpSitemapBundle\DependencyInjection;
 
 use InSquare\OpendxpSitemapBundle\Generator\ObjectGeneratorInterface;
+use InSquare\OpendxpSitemapBundle\Generator\ObjectGeneratorWithContextInterface;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Extension\Extension;
@@ -23,6 +24,8 @@ final class InSquareOpendxpSitemapExtension extends Extension implements Prepend
 
         $container->setParameter('in_square_opendxp_sitemap', $config);
         $container->registerForAutoconfiguration(ObjectGeneratorInterface::class)
+            ->addTag('in_square_opendxp_sitemap.object_generator');
+        $container->registerForAutoconfiguration(ObjectGeneratorWithContextInterface::class)
             ->addTag('in_square_opendxp_sitemap.object_generator');
 
         $loader = new YamlFileLoader(

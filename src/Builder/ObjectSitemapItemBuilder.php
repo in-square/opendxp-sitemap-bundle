@@ -2,23 +2,40 @@
 
 namespace InSquare\OpendxpSitemapBundle\Builder;
 
+use InSquare\OpendxpSitemapBundle\Generator\ObjectGeneratorInterface;
+use InSquare\OpendxpSitemapBundle\Generator\ObjectGeneratorWithContextInterface;
 use InSquare\OpendxpSitemapBundle\Generator\SitemapItemData;
+use InSquare\OpendxpSitemapBundle\Generator\SitemapGeneratorContext;
 use InSquare\OpendxpSitemapBundle\Message\SitemapItemCreateMessage;
 use InSquare\OpendxpSitemapBundle\Registry\ObjectGeneratorRegistry;
 use InSquare\OpendxpSitemapBundle\Repository\SitemapItemRepository;
+use InSquare\OpendxpSitemapBundle\Util\HostNormalizer;
 use OpenDxp\Model\DataObject\Concrete;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 final class ObjectSitemapItemBuilder
 {
     private SitemapItemRepository $repository;
     private ObjectGeneratorRegistry $registry;
+    private array $hostBySiteId;
 
     public function __construct(
         SitemapItemRepository $repository,
-        ObjectGeneratorRegistry $registry
+        ObjectGeneratorRegistry $registry,
+        #[Autowire('%in_square_opendxp_sitemap%')] array $config
     ) {
         $this->repository = $repository;
         $this->registry = $registry;
+        $this->hostBySiteId = [];
+
+        foreach ($config['sites'] ?? [] as $siteConfig) {
+            $siteId = (int) ($siteConfig['id'] ?? 0);
+            $host = (string) ($siteConfig['host'] ?? '');
+            $normalizedHost = HostNormalizer::normalize($host);
+            if ($normalizedHost !== '') {
+                $this->hostBySiteId[$siteId] = $normalizedHost;
+            }
+        }
     }
 
     public function buildFromMessage(SitemapItemCreateMessage $message): void
@@ -50,7 +67,25 @@ final class ObjectSitemapItemBuilder
             return;
         }
 
-        $item = $generator->buildItem($object, $siteId, $locale);
+        if ($generator instanceof ObjectGeneratorWithContextInterface) {
+            $host = $this->hostBySiteId[$siteId] ?? '';
+            if ($host === '') {
+                return;
+            }
+
+            $item = $generator->buildItem(
+                $object,
+                new SitemapGeneratorContext($siteId, $locale, $host)
+            );
+        } elseif ($generator instanceof ObjectGeneratorInterface) {
+            $item = $generator->buildItem($object, $siteId, $locale);
+        } else {
+            throw new \RuntimeException(sprintf(
+                'Object generator "%s" must implement ObjectGeneratorWithContextInterface or ObjectGeneratorInterface.',
+                $generatorId
+            ));
+        }
+
         if (!$item instanceof SitemapItemData) {
             return;
         }

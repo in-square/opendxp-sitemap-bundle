@@ -2,6 +2,9 @@
 
 namespace InSquare\OpendxpSitemapBundle\Generator;
 
+/**
+ * @deprecated Use ObjectGeneratorWithContextInterface instead.
+ */
 interface ObjectGeneratorInterface
 {
     public function getId(): string;

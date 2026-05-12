@@ -8,6 +8,7 @@ use OpenDxp\Model\Document;
 use OpenDxp\Model\Document\Page;
 use OpenDxp\Model\Site;
 use OpenDxp\Tool\Frontend;
+use InSquare\OpendxpSitemapBundle\Util\HostNormalizer;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 final class DocumentSitemapItemBuilder
@@ -27,8 +28,9 @@ final class DocumentSitemapItemBuilder
         foreach ($config['sites'] ?? [] as $siteConfig) {
             $siteId = (int) ($siteConfig['id'] ?? 0);
             $host = (string) ($siteConfig['host'] ?? '');
-            if ($host !== '') {
-                $this->hostBySiteId[$siteId] = rtrim($host, '/');
+            $normalizedHost = HostNormalizer::normalize($host);
+            if ($normalizedHost !== '') {
+                $this->hostBySiteId[$siteId] = $normalizedHost;
             }
 
             $languages = $siteConfig['languages'] ?? [];
@@ -120,10 +122,7 @@ final class DocumentSitemapItemBuilder
 
     private function buildUrl(string $host, string $prettyUrl): string
     {
-        $base = $this->normalizeHost($host);
-        $path = '/' . ltrim($prettyUrl, '/');
-
-        return rtrim($base, '/') . $path;
+        return HostNormalizer::buildAbsoluteUrl($host, $prettyUrl);
     }
 
     private function resolvePath(Document $document, int $siteId): ?string
@@ -159,15 +158,6 @@ final class DocumentSitemapItemBuilder
         }
 
         return $this->encodePath($path);
-    }
-
-    private function normalizeHost(string $host): string
-    {
-        if (str_starts_with($host, 'http://') || str_starts_with($host, 'https://')) {
-            return $host;
-        }
-
-        return 'https://' . $host;
     }
 
     private function encodePath(string $path): string

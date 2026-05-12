@@ -5,6 +5,7 @@ namespace InSquare\OpendxpSitemapBundle\Dumper;
 use InSquare\OpendxpSitemapBundle\Message\SitemapItemCreateMessage;
 use InSquare\OpendxpSitemapBundle\Repository\SitemapItemRepository;
 use InSquare\OpendxpSitemapBundle\Registry\ObjectGeneratorRegistry;
+use InSquare\OpendxpSitemapBundle\Util\HostNormalizer;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 final class SitemapDumper
@@ -286,7 +287,7 @@ final class SitemapDumper
         $writer->startElement('sitemapindex');
         $writer->writeAttribute('xmlns', 'http://www.sitemaps.org/schemas/sitemap/0.9');
 
-        $baseHost = rtrim($this->normalizeHost($host), '/');
+        $baseHost = HostNormalizer::normalize($host);
 
         foreach ($entries as $entry) {
             $writer->startElement('sitemap');
@@ -303,15 +304,6 @@ final class SitemapDumper
         $writer->endElement();
         $writer->endDocument();
         $writer->flush();
-    }
-
-    private function normalizeHost(string $host): string
-    {
-        if (str_starts_with($host, 'http://') || str_starts_with($host, 'https://')) {
-            return $host;
-        }
-
-        return 'https://' . $host;
     }
 
     private function normalizeLastmod(mixed $value): ?\DateTimeInterface
