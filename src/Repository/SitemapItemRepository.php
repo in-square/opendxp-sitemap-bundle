@@ -324,6 +324,7 @@ final class SitemapItemRepository
         return $result;
     }
 
+
     private function normalizeRow(array $data): array
     {
         $row = [];

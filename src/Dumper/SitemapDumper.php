@@ -211,6 +211,8 @@ final class SitemapDumper
 
         $writer = new \XMLWriter();
         $writer->openURI($filePath);
+        $writer->setIndent(true);
+        $writer->setIndentString('  ');
         $writer->startDocument('1.0', 'UTF-8');
         $writer->startElement('urlset');
         $writer->writeAttribute('xmlns', 'http://www.sitemaps.org/schemas/sitemap/0.9');
@@ -283,6 +285,8 @@ final class SitemapDumper
     {
         $writer = new \XMLWriter();
         $writer->openURI($filePath);
+        $writer->setIndent(true);
+        $writer->setIndentString('  ');
         $writer->startDocument('1.0', 'UTF-8');
         $writer->startElement('sitemapindex');
         $writer->writeAttribute('xmlns', 'http://www.sitemaps.org/schemas/sitemap/0.9');

@@ -6,6 +6,7 @@ use InSquare\OpendxpSitemapBundle\Message\SitemapItemCreateMessage;
 use InSquare\OpendxpSitemapBundle\Repository\SitemapItemRepository;
 use OpenDxp\Model\Document;
 use OpenDxp\Model\Document\Page;
+use OpenDxp\Model\Document\Service;
 use OpenDxp\Model\Site;
 use OpenDxp\Tool\Frontend;
 use InSquare\OpendxpSitemapBundle\Util\HostNormalizer;
@@ -16,12 +17,14 @@ final class DocumentSitemapItemBuilder
     private SitemapItemRepository $repository;
     private array $hostBySiteId;
     private array $languagesBySiteId;
+    private Service $documentService;
 
     public function __construct(
         SitemapItemRepository $repository,
         #[Autowire('%in_square_opendxp_sitemap%')] array $config
     ) {
         $this->repository = $repository;
+        $this->documentService = new Service();
         $this->hostBySiteId = [];
         $this->languagesBySiteId = [];
 
@@ -67,10 +70,11 @@ final class DocumentSitemapItemBuilder
 
         $url = $this->buildUrl($host, $path);
         $lastmod = $this->resolveLastmod($document);
+        $translationGroupId = $this->resolveTranslationGroupId($document);
 
         $this->repository->upsert([
             'element_type' => SitemapItemCreateMessage::TYPE_DOCUMENT,
-            'element_id' => $documentId,
+            'element_id' => $translationGroupId,
             'element_class' => null,
             'site_id' => $siteId,
             'locale' => $locale,
@@ -103,6 +107,19 @@ final class DocumentSitemapItemBuilder
         $date = new \DateTimeImmutable('@' . $timestamp);
 
         return $date->setTimezone(new \DateTimeZone(date_default_timezone_get()));
+    }
+
+    private function resolveTranslationGroupId(Document $document): int
+    {
+        try {
+            $sourceId = (int) $this->documentService->getTranslationSourceId($document);
+            if ($sourceId > 0) {
+                return $sourceId;
+            }
+        } catch (\Throwable) {
+        }
+
+        return (int) $document->getId();
     }
 
     private function isNoIndex(Document $document): bool
