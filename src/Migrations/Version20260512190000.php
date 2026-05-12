@@ -20,8 +20,13 @@ final class Version20260512190000 extends AbstractMigration
             'Migration can only be executed safely on "mysql" and "mariadb".'
         );
 
-        $this->addSql("ALTER TABLE `sitemap_item` ADD `last_seen_run_token` VARCHAR(32) DEFAULT NULL");
-        $this->addSql('CREATE INDEX `idx_sitemap_item_last_seen_run_token` ON `sitemap_item` (`last_seen_run_token`)');
+        if (!$this->hasColumn('last_seen_run_token')) {
+            $this->addSql("ALTER TABLE `sitemap_item` ADD `last_seen_run_token` VARCHAR(32) DEFAULT NULL");
+        }
+
+        if (!$this->hasIndex('idx_sitemap_item_last_seen_run_token')) {
+            $this->addSql('CREATE INDEX `idx_sitemap_item_last_seen_run_token` ON `sitemap_item` (`last_seen_run_token`)');
+        }
     }
 
     public function down(Schema $schema): void
@@ -32,7 +37,26 @@ final class Version20260512190000 extends AbstractMigration
             'Migration can only be executed safely on "mysql" and "mariadb".'
         );
 
-        $this->addSql('DROP INDEX `idx_sitemap_item_last_seen_run_token` ON `sitemap_item`');
-        $this->addSql('ALTER TABLE `sitemap_item` DROP `last_seen_run_token`');
+        if ($this->hasIndex('idx_sitemap_item_last_seen_run_token')) {
+            $this->addSql('DROP INDEX `idx_sitemap_item_last_seen_run_token` ON `sitemap_item`');
+        }
+
+        if ($this->hasColumn('last_seen_run_token')) {
+            $this->addSql('ALTER TABLE `sitemap_item` DROP `last_seen_run_token`');
+        }
+    }
+
+    private function hasColumn(string $columnName): bool
+    {
+        $columns = $this->connection->createSchemaManager()->listTableColumns('sitemap_item');
+
+        return array_key_exists(strtolower($columnName), $columns);
+    }
+
+    private function hasIndex(string $indexName): bool
+    {
+        $indexes = $this->connection->createSchemaManager()->listTableIndexes('sitemap_item');
+
+        return array_key_exists(strtolower($indexName), $indexes);
     }
 }
